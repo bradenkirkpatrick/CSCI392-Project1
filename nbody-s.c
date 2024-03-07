@@ -67,53 +67,33 @@ int main(int argc, const char* argv[]) {
     //   num_outputs  number of times the position will be output for all bodies
     //   output_steps number of steps between each output of the position
     //   input        n-by-7 Matrix of input data
-    //   n            number of bodies to simulate
-
-    // creates structures to store the particle's position, velocity, and mass
-    struct body {
-        double mass;
-        double x, y, z;
-        double vx, vy, vz;
-    };
-    // creates an array of bodies
-    struct body* bodies = malloc(n * sizeof(struct body));
-
-    //./nbody-s time-step total-time outputs-per-body input.npy output.npy
-
-    
-    for(int i = 0;i<n;i++){
-        bodies[i].mass = input->data[i*7];
-        bodies[i].x = input->data[i*7+1];
-        bodies[i].y = input->data[i*7+2];
-        bodies[i].z = input->data[i*7+3];
-        bodies[i].vx = input->data[i*7+4];
-        bodies[i].vy = input->data[i*7+5];
-        bodies[i].vz = input->data[i*7+6];
-    }
-    for(double time_left = total_time; time_left > 0; time_left -= time_step){
-        for(int i=0;i<n;i++){
-            for(int j=0;j<i;j++){
-                double dx = bodies[i].x - bodies[j].x;
-                double dy = bodies[i].y - bodies[j].y;
-                double dz = bodies[i].z - bodies[j].z;
-                double dist = sqrt(dx*dx + dy*dy + dz*dz);
-                double F = G * bodies[i].mass * bodies[j].mass / (dist*dist + SOFTENING*SOFTENING);
-                double Fx = F * dx / dist;
-                double Fy = F * dy / dist;
-                double Fz = F * dz / dist;
-                bodies[i].vx -= Fx / bodies[i].mass * time_step;
-                bodies[i].vy -= Fy / bodies[i].mass * time_step;
-                bodies[i].vz -= Fz / bodies[i].mass * time_step;
-                bodies[j].vx += Fx / bodies[j].mass * time_step;
-                bodies[j].vy += Fy / bodies[j].mass * time_step;
-                bodies[j].vz += Fz / bodies[j].mass * time_step;
-            }
-        }
-    }
+    //   n            number of bodies to simulate    
 
     // start the clock
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
+
+    Matrix* next_matrix = matrix_copy(input);
+    for(double time_left = total_time; time_left > 0; time_left -= time_step){
+        for(int i=0;i<n;i++){
+            for(int j=0;j<i;j++){
+                double dx = input->data[7*i+1] - input->data[7*j+1];
+                double dy = input->data[7*i+2] - input->data[7*j+2];
+                double dz = input->data[7*i+3] - input->data[7*j+3];
+                double dist = sqrt(dx*dx + dy*dy + dz*dz);
+                double F = G * time_step / (dist*dist*dist + SOFTENING);
+                double Fi = F * input->data[7*j];
+                double Fj = F * input->data[7*i];
+                next_matrix->data[7*i+4] -= Fi * dx;
+                next_matrix->data[7*i+5] -= Fi * dy;
+                next_matrix->data[7*i+6] -= Fi * dz;
+                next_matrix->data[7*j+4] -= Fj * dx;
+                next_matrix->data[7*j+5] -= Fj * dy;
+                next_matrix->data[7*j+6] -= Fj * dz;
+            }
+        }
+        memcpy(input->data, next_matrix->data, next_matrix->size*sizeof(double));
+    }
 
 
     // get the end and computation time
@@ -125,7 +105,8 @@ int main(int argc, const char* argv[]) {
     //matrix_to_npy_path(argv[5], output);
 
     // cleanup
-
+    matrix_free(input);
+    matrix_free(next_matrix);
 
     return 0;
 }
