@@ -2,7 +2,7 @@
  * Runs a simulation of the n-body problem in 3D.
  * 
  * To compile the program:
- *   gcc -Wall -fopenmp -O3 -march=native nbody-p3.c matrix.c util.c -o nbody-p3 -lm
+ *   gcc -Wall -fopenmp -O3 -march=native nbody-p3.c matrix.c util.c -o build/nbody-p3 -lm
  * 
  * To run the program:
  *   ./nbody-p3 time-step total-time outputs-per-body input.npy output.npy [opt: num-threads]

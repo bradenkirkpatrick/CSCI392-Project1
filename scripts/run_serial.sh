@@ -21,7 +21,7 @@ for FILE in random100.npy random1000.npy random10000.npy; do
     echo nbody-s
     for i in `seq 3`
     do
-        ./nbody-s 0.01 10 1000 "$SFILE" "$SCRATCH/temp-$i.npy" &  # & means to background the process
+        ./build/nbody-s 0.01 10 1000 "$SFILE" "$SCRATCH/temp-$i.npy" &  # & means to background the process
     done
     wait # waits for all background processes
     echo
@@ -29,7 +29,7 @@ for FILE in random100.npy random1000.npy random10000.npy; do
     echo nbody-s3
     for i in `seq 3`
     do
-        ./nbody-s3 0.01 10 1000 "$SFILE" "$SCRATCH/temp-$i.npy" &
+        ./build/nbody-s3 0.01 10 1000 "$SFILE" "$SCRATCH/temp-$i.npy" &
     done
     wait
     echo
