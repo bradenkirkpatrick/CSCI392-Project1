@@ -94,7 +94,7 @@ int main(int argc, const char* argv[]) {
         }
         memcpy(input->data, next_matrix->data, next_matrix->size*sizeof(double));
     }
-
+    Matrix* output = next_matrix;
 
     // get the end and computation time
     clock_gettime(CLOCK_MONOTONIC, &end);
@@ -102,7 +102,7 @@ int main(int argc, const char* argv[]) {
     printf("%f secs\n", time);
 
     // save results
-    //matrix_to_npy_path(argv[5], output);
+    matrix_to_npy_path(argv[5], output);
 
     // cleanup
     matrix_free(input);
