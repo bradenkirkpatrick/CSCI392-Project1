@@ -24,7 +24,7 @@
  * 
  * See the PDF for implementation details and other requirements.
  * 
- * AUTHORS:
+ * AUTHORS: David Marrero
  */
 
 #include <stdbool.h>
@@ -42,6 +42,35 @@
 // Softening factor to reduce divide-by-near-zero effects
 #define SOFTENING 1e-9
 
+void universal_gravitation(double* x, double* y, double* z, double* vx, double* vy, double* vz, double* masses, size_t n, double time_step){
+    for(size_t i=0;i<n;i++){
+        // go to i in s3
+        for(size_t j=0;j<n;j++){
+            if (i == j) { continue; }
+            double dx = x[i] - x[j];
+            double dy = y[i] - y[j];
+            double dz = z[i] - z[j];
+            double dist = sqrt(dx*dx + dy*dy + dz*dz + SOFTENING);
+            double F = G * time_step / (dist*dist*dist);
+            double Fi = F * masses[j];
+            double Fj = F * masses[j];
+            vx[i] -= Fi * dx;
+            vy[i] -= Fi * dy;
+            vx[j] += Fj * dx;
+            vz[i] -= Fi * dz;
+            vy[j] += Fj * dy;
+            vz[j] += Fj * dz;
+        }
+    }
+}
+
+void save_outputs(Matrix* output, double* x, double* y, double* z, size_t n, size_t row){
+    for(size_t i=0;i<n;i++){
+        output->data[row*3*n + 0 + 3*i] = x[i];
+        output->data[row*3*n + 1 + 3*i] = y[i];
+        output->data[row*3*n + 2 + 3*i] = z[i];
+    }
+}
 
 int main(int argc, const char* argv[]) {
     // parse arguments
@@ -73,28 +102,60 @@ int main(int argc, const char* argv[]) {
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
-    Matrix* next_matrix = matrix_copy(input);
-    for(double time_left = total_time; time_left > 0; time_left -= time_step){
-        for(int i=0;i<n;i++){
-            for(int j=0;j<i;j++){
-                double dx = input->data[7*i+1] - input->data[7*j+1];
-                double dy = input->data[7*i+2] - input->data[7*j+2];
-                double dz = input->data[7*i+3] - input->data[7*j+3];
-                double dist = sqrt(dx*dx + dy*dy + dz*dz);
-                double F = G * time_step / (dist*dist*dist + SOFTENING);
-                double Fi = F * input->data[7*j];
-                double Fj = F * input->data[7*i];
-                next_matrix->data[7*i+4] -= Fi * dx;
-                next_matrix->data[7*i+5] -= Fi * dy;
-                next_matrix->data[7*i+6] -= Fi * dz;
-                next_matrix->data[7*j+4] -= Fj * dx;
-                next_matrix->data[7*j+5] -= Fj * dy;
-                next_matrix->data[7*j+6] -= Fj * dz;
-            }
-        }
-        memcpy(input->data, next_matrix->data, next_matrix->size*sizeof(double));
+    double* masses = malloc(n * sizeof(double));
+    double* x = malloc((n*3) * sizeof(double));
+    double* y = malloc((n*3) * sizeof(double));
+    double* z = malloc((n*3) * sizeof(double));
+    double* vx = malloc((n*3) * sizeof(double));
+    double* vy = malloc((n*3) * sizeof(double));
+    double* vz = malloc((n*3) * sizeof(double));
+
+
+    Matrix* next_matrix = matrix_create_raw(n*3, 7);
+
+    // malloc the masses and velocities
+    for (size_t i = 0; i < n; i++) {
+        masses[i] = input->data[7*i];
+        x[i] = input->data[7*i+1];
+        y[i] = input->data[7*i+2];
+        z[i] = input->data[7*i+3];
+        vx[i] = input->data[7*i+4];
+        vy[i] = input->data[7*i+5];
+        vz[i] = input->data[7*i+6];
     }
-    Matrix* output = next_matrix;
+
+    // allocate output matrix as num_outputs x
+    Matrix* output = matrix_create_raw(num_outputs, 3*n);
+
+    // save positions to row `0` of output
+    save_outputs(output, x, y, z, n, 0);
+    
+    // Run simulation for each time step 
+    for (size_t t = 1; t < num_steps; t++) { 
+        // update the velocities
+        universal_gravitation(x, y, z, vx, vy, vz, masses, n, time_step);
+
+
+        // update the positions
+        for (size_t i = 0; i < n; i++) {
+            x[i] += vx[i] * time_step;
+            y[i] += vy[i] * time_step;
+            z[i] += vz[i] * time_step;
+        }
+
+        // Periodically copy the positions to the output data 
+        if (t % output_steps == 0) { 
+            // save positions to row `t/output_steps` of output 
+            save_outputs(output, x, y, z, n, t/output_steps);
+        } 
+    } 
+    
+    // Save the final set of data if necessary 
+    if (num_steps % output_steps != 0) { 
+        //  save positions to row `num_outputs-1` of output 
+        save_outputs(output, x, y, z, n, num_outputs-1);
+    }  
+
 
     // get the end and computation time
     clock_gettime(CLOCK_MONOTONIC, &end);
