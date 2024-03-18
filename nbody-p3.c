@@ -119,9 +119,6 @@ int main(int argc, const char* argv[]) {
     double* vy = malloc((n*3) * sizeof(double));
     double* vz = malloc((n*3) * sizeof(double));
 
-
-    Matrix* next_matrix = matrix_create_raw(n*3, 7);
-
     // malloc the masses and velocities
     for (size_t i = 0; i < n; i++) {
         masses[i] = input->data[7*i];
@@ -178,8 +175,16 @@ int main(int argc, const char* argv[]) {
     matrix_to_npy_path(argv[5], output);
 
     // cleanup
+    free(masses);
+    free(x);
+    free(y);
+    free(z);
+    free(vx);
+    free(vy);
+    free(vz);
     matrix_free(input);
-    matrix_free(next_matrix);
+    matrix_free(output);
+
 
 
     return 0;

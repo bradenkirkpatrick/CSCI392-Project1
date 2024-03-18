@@ -125,9 +125,6 @@ int main(int argc, const char* argv[]) {
     double* vy = malloc((n*3) * sizeof(double));
     double* vz = malloc((n*3) * sizeof(double));
 
-
-    Matrix* next_matrix = matrix_create_raw(n*3, 7);
-
     // malloc the masses and velocities
   //  #pragma omp parallel for num_threads(8) schedule(dynamic)  default(none) firstprivate(x,y,z,vx,vy,vz) shared(n,masses,input)
  //   #pragma omp parallel for schedule(static) num_threads(16) shared(A,B,C) default(none) firstprivate(m,p,n)
@@ -188,7 +185,15 @@ int main(int argc, const char* argv[]) {
     matrix_to_npy_path(argv[5], output);
 
     // cleanup
+    free(masses);
+    free(x);
+    free(y);
+    free(z);
+    free(vx);
+    free(vy);
+    free(vz);
     matrix_free(input);
-    matrix_free(next_matrix);
+    matrix_free(output);
+
     return 0;
 }

@@ -53,11 +53,11 @@ void universal_gravitation(double* x, double* y, double* z, double* vx, double* 
             double dist = sqrt(dx*dx + dy*dy + dz*dz + SOFTENING);
             double F = G * time_step / (dist*dist*dist);
             double Fi = F * masses[j];
-            double Fj = F * masses[j];
+            double Fj = F * masses[i];
             vx[i] -= Fi * dx;
             vy[i] -= Fi * dy;
-            vx[j] += Fj * dx;
             vz[i] -= Fi * dz;
+            vx[j] += Fj * dx;
             vy[j] += Fj * dy;
             vz[j] += Fj * dz;
         }
@@ -109,9 +109,6 @@ int main(int argc, const char* argv[]) {
     double* vx = malloc((n*3) * sizeof(double));
     double* vy = malloc((n*3) * sizeof(double));
     double* vz = malloc((n*3) * sizeof(double));
-
-
-    Matrix* next_matrix = matrix_create_raw(n*3, 7);
 
     // malloc the masses and velocities
     for (size_t i = 0; i < n; i++) {
@@ -166,8 +163,16 @@ int main(int argc, const char* argv[]) {
     matrix_to_npy_path(argv[5], output);
 
     // cleanup
+    free(masses);
+    free(x);
+    free(y);
+    free(z);
+    free(vx);
+    free(vy);
+    free(vz);
     matrix_free(input);
-    matrix_free(next_matrix);
+    matrix_free(output);
+
 
     return 0;
 }
