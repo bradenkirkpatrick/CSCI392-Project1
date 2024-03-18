@@ -16,7 +16,7 @@ SCRATCH="/scratch/$USER/job_$SLURM_JOB_ID"
 
 for FILE in random100.npy random1000.npy random10000.npy; do
     echo $FILE
-    cp "$SCRATCH/nbody-examples/$FILE" "$SCRATCH"
+    cp "$HOME/nbody-examples/$FILE" "$SCRATCH"
     SFILE="$SCRATCH/$FILE"
     echo nbody-s
     for i in `seq 3`
