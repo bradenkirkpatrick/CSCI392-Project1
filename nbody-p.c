@@ -46,43 +46,6 @@
 // Softening factor to reduce divide-by-near-zero effects
 #define SOFTENING 1e-9
 
-void universal_gravitation(double* x, double* y, double* z, double* vx, double* vy, double* vz, double* masses, size_t n, double time_step){
-   // #pragma omp parallel for num_threads(128) schedule(auto) default(none) shared(x,y,z,vx,vy,vz,n,masses,time_step) 
-#pragma omp parallel for num_threads(64) default(none) shared(x,y,z,vx,vy,vz,n,masses,time_step) 
-    for(size_t i=0;i<n;i++){
-        // go to i in s3
-   // #pragma omp parallel for
-  // #pragma omp parallel for num_threads(64) default(none) shared(i,x,y,z,vx,vy,vz,n,masses,time_step) 
-
-        for(size_t j=0;j<n;j++){
-            if (i == j) { continue; }
-            double dx = x[i] - x[j];
-            double dy = y[i] - y[j];
-            double dz = z[i] - z[j];
-            double dist = sqrt(dx*dx + dy*dy + dz*dz + SOFTENING);
-            double F = G * time_step / (dist*dist*dist);
-            double Fi = F * masses[j];
-            double Fj = F * masses[j];
-            vx[i] -= Fi * dx;
-            vy[i] -= Fi * dy;
-            vx[j] += Fj * dx;
-            vz[i] -= Fi * dz;
-            vy[j] += Fj * dy;
-            vz[j] += Fj * dz;
-        }
-    }
-}
-
-void save_outputs(Matrix* output, double* x, double* y, double* z, size_t n, size_t row){
-   //  #pragma omp parallel for num_threads(8) default(none) shared(output,x,y,z,n,row)
-
-    for(size_t i=0;i<n;i++){
-        output->data[row*3*n + 0 + 3*i] = x[i];
-        output->data[row*3*n + 1 + 3*i] = y[i];
-        output->data[row*3*n + 2 + 3*i] = z[i];
-    }
-}
-
 int main(int argc, const char* argv[]) {
     // parse arguments
     if (argc != 6 && argc != 7) { fprintf(stderr, "usage: %s time-step total-time outputs-per-body input.npy output.npy [num-threads]\n", argv[0]); return 1; }
@@ -117,6 +80,7 @@ int main(int argc, const char* argv[]) {
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
+    // malloc the masses and velocities
     double* masses = malloc(n * sizeof(double));
     double* x = malloc((n*3) * sizeof(double));
     double* y = malloc((n*3) * sizeof(double));
@@ -124,10 +88,6 @@ int main(int argc, const char* argv[]) {
     double* vx = malloc((n*3) * sizeof(double));
     double* vy = malloc((n*3) * sizeof(double));
     double* vz = malloc((n*3) * sizeof(double));
-
-    // malloc the masses and velocities
-  //  #pragma omp parallel for num_threads(8) schedule(dynamic)  default(none) firstprivate(x,y,z,vx,vy,vz) shared(n,masses,input)
- //   #pragma omp parallel for schedule(static) num_threads(16) shared(A,B,C) default(none) firstprivate(m,p,n)
  
     for (size_t i = 0; i < n; i++) {
         masses[i] = input->data[7*i];
@@ -145,30 +105,47 @@ int main(int argc, const char* argv[]) {
     // save positions to row `0` of output
     save_outputs(output, x, y, z, n, 0);
     
-       omp_set_num_threads(num_threads);
-  #pragma omp parallel for default(none) shared(x,y,z,vx,vy,vz,n,masses,time_step,num_steps,num_threads,output_steps,output) 
+    #pragma omp parallel default(none) \
+    shared(x,y,z,vx,vy,vz,n,masses,time_step,num_steps,num_threads,output_steps,output) 
+    {
+        // Run simulation for each time step 
+        for (size_t t = 1; t < num_steps; t++) {
+            #pragma omp for schedule(static)
+            for(size_t i=0;i<n;i++){
+                for(size_t j=0;j<n;j++){
+                    if (i == j) { continue; }
+                    double dx = x[i] - x[j];
+                    double dy = y[i] - y[j];
+                    double dz = z[i] - z[j];
+                    double dist = sqrt(dx*dx + dy*dy + dz*dz + SOFTENING);
+                    double F = G * time_step / (dist*dist*dist);
+                    double Fi = F * masses[j];
+                    vx[i] -= Fi * dx;
+                    vy[i] -= Fi * dy;
+                    vz[i] -= Fi * dz;
+                }
+            }
 
-    // Run simulation for each time step 
-    for (size_t t = 1; t < num_steps; t++) { 
-        // update the velocities
-        universal_gravitation(x, y, z, vx, vy, vz, masses, n, time_step);
+            // update the positions
+            #pragma omp for schedule(static) simd
+            for (size_t i = 0; i < n; i++) {
+                x[i] += vx[i] * time_step;
+                y[i] += vy[i] * time_step;
+                z[i] += vz[i] * time_step;
+            }       
 
- //#pragma omp parallel for num_threads(32) default(none) shared(vx,vy,vz,n,x,y,z,time_step)
-
-        // update the positions
-        for (size_t i = 0; i < n; i++) {
-            x[i] += vx[i] * time_step;
-            y[i] += vy[i] * time_step;
-            z[i] += vz[i] * time_step;
-        }
-
-        // Periodically copy the positions to the output data 
-        if (t % output_steps == 0) { 
-            // save positions to row `t/output_steps` of output 
-            save_outputs(output, x, y, z, n, t/output_steps);
+            // Periodically copy the positions to the output data 
+            if (t % output_steps == 0) { 
+                // save positions to row `t/output_steps` of output 
+                #pragma omp for schedule(static)
+                for(size_t i=0;i<n;i++){
+                    output->data[row*3*n + 0 + 3*i] = x[i];
+                    output->data[row*3*n + 1 + 3*i] = y[i];
+                    output->data[row*3*n + 2 + 3*i] = z[i];
+                }
+            } 
         } 
-    } 
-    
+    }
     // Save the final set of data if necessary 
     if (num_steps % output_steps != 0) { 
         //  save positions to row `num_outputs-1` of output 
@@ -185,15 +162,6 @@ int main(int argc, const char* argv[]) {
     matrix_to_npy_path(argv[5], output);
 
     // cleanup
-    free(masses);
-    free(x);
-    free(y);
-    free(z);
-    free(vx);
-    free(vy);
-    free(vz);
     matrix_free(input);
-    matrix_free(output);
-
     return 0;
 }
